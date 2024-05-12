@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Map Generator</title>
+    <script type="module" src="sam.js"></script>
+    <link rel="icon" href="https://jamesg.blog/favicon.ico">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        label {
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Map Generator</h1>
+    <p>Generate an image map you can paste into your HTML.</p>
+    <label for="label">URL</label>
+    <input id="label" type="text" />
+    <p id="message"></p>
+    <section id="app">
+        <img src="{{ image }}" id="image" />
+        <canvas id="canvas"></canvas>
+    </section>
+    <p id="status"></p>
+    <script>
+    </script>
+    <textarea id="map" rows="10" cols="30">
+    </textarea>
+    <script>
+        var final_points = {};
+        var all_points = [];
+        var last_polygon = [];
+        var resized = false;
+
+        // when image loaded, set canvas height
+        document.getElementById('image').addEventListener('load', (e) => {
+            document.getElementById('canvas').height = e.target.height;
+            document.getElementById('canvas').width = e.target.width;
+        });
+
+
+        // when press enter, move all points to final points with input text
+        document.getElementById('label').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                var label = document.getElementById('label').value;
+                final_points[label] = last_polygon;
+                all_points = [];
+                console.log(final_points);
+                document.getElementById('label').value = '';
+                document.getElementById('message').innerText = 'Successfully added label';
+
+                // expire message in 2 seconds
+                setTimeout(() => {
+                    document.getElementById('message').innerText = '';
+                }, 2000);
+            }
+
+            var textarea = document.getElementById('map');
+            textarea.value = '<map name="image_map">';
+            for (var label in final_points) {
+                for (var polygon of final_points[label]) {
+                    var mapText = `<area shape="poly" coords="${polygon.flat().join(',')}" href="${label}" alt="${label}" />\n`;
+                    textarea.value += mapText;
+                }
+            }
+            textarea.value += '</map>';
+            textarea.value += "<script src='https://cdn.jsdelivr.net/npm/image-map-resizer@1.0.10/js/imageMapResizer.min.js'";
+            textarea.value += "</" + "script>";
+        });
+        // when you click, send POST to localhost:5000 with points
+        document.getElementById('canvas').addEventListener('click', (e) => {
+            var x = e.offsetX;
+            var y = e.offsetY;
+
+            console.log(x, y);
+            const label = document.getElementById('label').value;
+            // add points
+            // if all points is even or 0, label is 1, else label is 0
+            var point_label = all_points.length % 2 == 0 ? 1 : 0;
+
+            all_points.push([x, y, point_label]);
+            // draw dot
+            const ctx = document.getElementById('canvas').getContext('2d');
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+            ctx.closePath();
+
+            console.log(e);
+            fetch('http://localhost:5000', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    points: all_points
+                })
+            }).then((response) => {
+                return response.json();
+            }).then((data) => {
+                // clear canvas
+                var img_w = document.getElementById('image').width;
+                var img_h = document.getElementById('image').height;
+                const ctx = document.getElementById('canvas').getContext('2d');
+                ctx.clearRect(0, 0, img_w, img_h);
+                map.value = data.map;
+                var textarea = document.getElementById('map');
+                textarea.value = '<map name="image_map">';
+                // draw "coords" polygon on canvas
+                for (var polygon of data.coords) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'red';
+                    ctx.moveTo(polygon[0][0], polygon[0][1]);
+                    for (var point of polygon.slice(1)) {
+                        ctx.lineTo(point[0], point[1]);
+                    }
+                    var mapText = `<area shape="poly" coords="${polygon.flat().join(',')}" href="#" alt="${label}" />\n`;
+                    textarea.value += mapText;
+                    ctx.closePath();
+                    // red border
+                    ctx.stroke();
+                    console.log(data);
+                    // fill with blue background
+                    ctx.fillStyle = 'blue';
+                    ctx.fill();
+                }
+
+                textarea.value += '</map>';
+
+                last_polygon = data.coords;
+            });
+
+        });
+    </script>
+    
+    <style>
+        #app {
+            position: relative;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0.5;
+        }
+        input {
+            margin-bottom: 10px;
+            padding: 5px;
+            font-size: 16px;
+            max-width: 35em;
+            width: 100%;
+        }
+        a {
+            color: royalblue;
+        }
+        a:focus {
+            outline: 1px dashed;
+        }
+        textarea {
+            margin-top: 10px;
+            padding: 5px;
+            font-size: 16px;
+            max-width: 35em;
+            width: 100%;
+        }
+        h1, h2 {
+            color: royalblue;
+        }
+    </style>
+    <h2>How to Use</h2>
+    <ul>
+        <li>Enter the URL you want to link to in the URL input box.</li>
+        <li>Click on the image to create a polygon. You can click multiple times to expand your polygon.</li>
+        <li>Press Enter to save the polygon.</li>
+        <li>Repeat the process to create more polygons.</li>
+        <li>Copy the HTML code from the textarea and paste it into your HTML file.</li>
+    </ul>
+    <footer>
+        <p>Made with ❤️ and ☕️ by <a href="https://jamesg.blog">capjamesg</a>.</p>
+    </footer>
+</body>
+</html>
